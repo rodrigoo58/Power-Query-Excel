@@ -1,0 +1,29 @@
+let
+    Source = Source,
+    #"Filtered Rows" = Table.SelectRows(Source, each ([Grupos de Clasificación] = "PLANILLA ESPECIAL")),
+    #"Removed Other Columns" = Table.SelectColumns(#"Filtered Rows",{"Categoria", "Subcategoria", "Actividad ID", "Concepto", "Unidad", "Cantidad Total", "Moneda", "Precio Origen", "Costo", "Margen", "Grupos de Clasificación"}),
+    #"Filtered Rows1" = Table.SelectRows(#"Removed Other Columns", each [Cantidad Total] <> 0),
+    #"Added Custom" = Table.AddColumn(#"Filtered Rows1", "Employee Category", each "NA"),
+    #"Merged Queries1" = Table.NestedJoin(#"Added Custom", {"Employee Category"}, #"Employee Category Aux", {"Name"}, "Employee Category Aux", JoinKind.Inner),
+    #"Expanded Employee Category Aux" = Table.ExpandTableColumn(#"Merged Queries1", "Employee Category Aux", {"Value"}, {"EmployeeCategoryValue"}),
+    #"Merged Queries2" = Table.NestedJoin(#"Expanded Employee Category Aux", {"Grupos de Clasificación"}, #"Employment Type Aux", {"Name"}, "Employment Type Aux", JoinKind.Inner),
+    #"Expanded Employment Type Aux" = Table.ExpandTableColumn(#"Merged Queries2", "Employment Type Aux", {"Value"}, {"EmploymentTypeValue"}),
+    #"Renamed Columns1" = Table.RenameColumns(#"Expanded Employment Type Aux",{{"Precio Origen", "UnitCost"}, {"Cantidad Total", "Quantity"}}),
+    #"Merged Queries3" = Table.NestedJoin(#"Renamed Columns1", {"Actividad ID"}, #"Activity Aux", {"Actividad ID"}, "Activity Aux", JoinKind.Inner),
+    #"Expanded Activity Aux" = Table.ExpandTableColumn(#"Merged Queries3", "Activity Aux", {"ID"}, {"ActivityKey"}),
+    #"Replaced Value1" = Table.ReplaceValue(#"Expanded Activity Aux",null,"PEN",Replacer.ReplaceValue,{"Moneda"}),
+    #"Merged Queries4" = Table.NestedJoin(#"Replaced Value1", {"Unidad"}, #"Units Aux", {"UNIDAD"}, "Units Aux", JoinKind.Inner),
+    #"Expanded Units Aux" = Table.ExpandTableColumn(#"Merged Queries4", "Units Aux", {"CODIGO"}, {"UnitKey"}),
+    #"Merged Queries5" = Table.NestedJoin(#"Expanded Units Aux", {"Subcategoria"}, #"Categories Aux", {"SUBCATEGORIA"}, "Categories Aux", JoinKind.LeftOuter),
+    #"Expanded Categories Aux" = Table.ExpandTableColumn(#"Merged Queries5", "Categories Aux", {"ID_SUBCATEGORIA"}, {"SubcategoryKey"}),
+    #"Renamed Columns" = Table.RenameColumns(#"Expanded Categories Aux",{{"Categoria", "CategoryKey"}, {"Concepto", "Subject"}, {"Moneda", "CurrencyKey"}}),
+    #"Added Custom1" = Table.AddColumn(#"Renamed Columns", "Quantity2", each if [Unidad] = "Día" then [Quantity]*8 else if [Unidad] = "Mes" then [Quantity]*160 else if [Unidad] = 
+"Horas" then [Quantity] else 0),
+    #"Personalizada agregada" = Table.AddColumn(#"Added Custom1", "Personalizado", each if [Unidad] <> "Horas" then [Costo]/[Quantity2] else [Costo]),
+    #"Removed Columns" = Table.RemoveColumns(#"Personalizada agregada",{"Quantity", "UnitCost"}),
+    #"Renamed Columns2" = Table.RenameColumns(#"Removed Columns",{{"Personalizado", "UnitCost"}, {"Quantity2", "Quantity"}}),
+    #"Inserted Multiplication" = Table.AddColumn(#"Renamed Columns2", "UnitPrice", each [UnitCost] * [Margen], type number),
+    #"Removed Other Columns1" = Table.SelectColumns(#"Inserted Multiplication",{"CategoryKey", "Subject", "Quantity", "CurrencyKey", "UnitCost", "EmployeeCategoryValue", "EmploymentTypeValue", "UnitPrice", "ActivityKey", "UnitKey", "SubcategoryKey"}),
+    #"Changed Type" = Table.TransformColumnTypes(#"Removed Other Columns1",{{"CategoryKey", type text}, {"Subject", type text}, {"CurrencyKey", type text}, {"UnitKey", type text}, {"SubcategoryKey", type text}, {"Quantity", type number}, {"UnitCost", type number}, {"EmployeeCategoryValue", type number}, {"EmploymentTypeValue", type number}, {"UnitPrice", type number}, {"ActivityKey", type number}})
+in
+    #"Changed Type"
